@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Pointeuse BCSO ULTIMATE</title>
+
+<style>
+body {
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
+  text-align: center;
+}
+
+/* BOX */
+.box {
+  background: #1e293b;
+  padding: 20px;
+  border-radius: 10px;
+  width: 320px;
+  margin: auto;
+  margin-top: 30px;
+}
+
+/* INPUT */
+input {
+  padding: 8px;
+  margin: 5px;
+  border-radius: 6px;
+  border: none;
+  width: 90%;
+}
+
+/* BUTTON */
+button {
+  padding: 8px 12px;
+  margin: 5px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* SWITCH */
+.switch {
+  width: 80px;
+  height: 40px;
+  background: red;
+  border-radius: 20px;
+  margin: 20px auto;
+  position: relative;
+  cursor: pointer;
+}
+
+.circle {
+  width: 30px;
+  height: 30px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  transition: 0.3s;
+}
+
+.active {
+  background: green;
+}
+
+.active .circle {
+  left: 45px;
+}
+
+/* LOG */
+#log {
+  margin-top: 20px;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: left;
+}
+
+/* MANUEL PETIT */
+.small input {
+  width: 140px;
+  font-size: 12px;
+}
+.small button {
+  font-size: 12px;
+}
+</style>
+
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="box">
+  <h2>Connexion</h2>
+  <input id="matricule" placeholder="Matricule"><br>
+  <input id="password" type="password" placeholder="Mot de passe"><br>
+  <button onclick="login()">Se connecter</button>
+  <br>
+  <button onclick="showRegister()">Créer un compte</button>
+</div>
+
+<!-- REGISTER -->
+<div id="register" class="box" style="display:none">
+  <h2>Inscription</h2>
+  <input id="r_nom" placeholder="Nom"><br>
+  <input id="r_prenom" placeholder="Prénom"><br>
+  <input id="r_matricule" placeholder="Matricule"><br>
+  <input id="r_password" type="password" placeholder="Mot de passe"><br>
+  <button onclick="register()">Créer</button>
+  <br>
+  <button onclick="showLogin()">Retour</button>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+
+<h2 id="userInfo"></h2>
+
+<div id="switch" class="switch" onclick="toggle()">
+  <div class="circle"></div>
+</div>
+
+<div id="status">Hors service</div>
+<div id="chrono">00:00</div>
+
+<!-- AJOUT MANUEL -->
+<div class="small">
+  <h4>Ajout manuel</h4>
+  <input type="datetime-local" id="debut">
+  <input type="datetime-local" id="fin">
+  <button onclick="ajoutManuel()">OK</button>
+</div>
+
+<div id="log"></div>
+
+</div>
+
+<script>
+let users = JSON.parse(localStorage.getItem("users")) || [];
+let logs = JSON.parse(localStorage.getItem("logs")) || {};
+let currentUser = null;
+
+function showRegister() {
+  login.style.display = "none";
+  register.style.display = "block";
+}
+
+function showLogin() {
+  register.style.display = "none";
+  login.style.display = "block";
+}
+
+function register() {
+  let user = {
+    nom: r_nom.value,
+    prenom: r_prenom.value,
+    matricule: r_matricule.value,
+    password: r_password.value
+  };
+
+  users.push(user);
+  localStorage.setItem("users", JSON.stringify(users));
+  alert("Compte créé !");
+  showLogin();
+}
+
+function login() {
+  let m = matricule.value;
+  let p = password.value;
+
+  if (m === "admin" && p === "admin") {
+    currentUser = { admin: true };
+  } else {
+    currentUser = users.find(u => u.matricule === m && u.password === p);
+  }
+
+  if (!currentUser) return alert("Erreur");
+
+  if (!logs[m]) logs[m] = [];
+
+  login.style.display = "none";
+  app.style.display = "block";
+
+  userInfo.innerText = currentUser.admin
+    ? "ADMIN"
+    : currentUser.prenom + " " + currentUser.nom;
+
+  afficher();
+}
+
+let actif = false;
+let debutTime;
+let chronoInterval;
+
+function toggle() {
+  let now = new Date();
+
+  if (!actif) {
+    debutTime = now;
+    actif = true;
+    switch.classList.add("active");
+    status.innerText = "En service";
+
+    chronoInterval = setInterval(() => {
+      let diff = Math.floor((new Date() - debutTime) / 1000);
+      let m = Math.floor(diff / 60);
+      let s = diff % 60;
+      chrono.innerText =
+        String(m).padStart(2, '0') + ":" + String(s).padStart(2, '0');
+    }, 1000);
+
+  } else {
+    clearInterval(chronoInterval);
+    actif = false;
+    switch.classList.remove("active");
+    status.innerText = "Hors service";
+
+    let diff = Math.floor((now - debutTime) / 60000);
+    if (diff < 1) return;
+
+    let key = currentUser.admin ? "admin" : currentUser.matricule;
+
+    logs[key].push({
+      debut: debutTime.toLocaleString(),
+      fin: now.toLocaleString(),
+      duree: diff
+    });
+
+    save();
+    afficher();
+  }
+}
+
+function ajoutManuel() {
+  let d = new Date(debut.value);
+  let f = new Date(fin.value);
+
+  let diff = Math.floor((f - d) / 60000);
+  if (diff < 1) return;
+
+  let key = currentUser.admin ? "admin" : currentUser.matricule;
+
+  logs[key].push({
+    debut: d.toLocaleString(),
+    fin: f.toLocaleString(),
+    duree: diff
+  });
+
+  save();
+  afficher();
+}
+
+function save() {
+  localStorage.setItem("logs", JSON.stringify(logs));
+}
+
+function afficher() {
+  let html = "<h3>Historique</h3>";
+
+  if (currentUser.admin) {
+    for (let user in logs) {
+      html += `<h4>${user}</h4>`;
+      logs[user].forEach(l => {
+        html += `<p>${l.debut} → ${l.fin} (${l.duree} min)</p>`;
+      });
+    }
+  } else {
+    let userLogs = logs[currentUser.matricule] || [];
+    userLogs.slice().reverse().forEach(l => {
+      html += `<p>${l.debut} → ${l.fin} (${l.duree} min)</p>`;
+    });
+  }
+
+  log.innerHTML = html;
+}
+</script>
+
+</body>
+</html>
